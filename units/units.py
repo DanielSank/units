@@ -2,15 +2,34 @@ import fractions
 import math
 import re
 
-SI_POWERS = { #prefix -> power of ten
-    'k': 3,
-    'M': 6,
+SI_PREFIXES = { #prefix -> power of ten
     'G': 9,
+    'M': 6,
+    'k': 3,
     'c': -2,
-    'm': -3
+    'm': -3,
+    'u': -6,
+    'n': -9,
+    'p': -12,
+    'a': -15
     }
 
+POWERS_OF_TEN = {}
+for key,value in SI_PREFIXES.items():
+    POWERS_OF_TEN[value] = key
+
 MULT = '*'
+
+
+class SingleDimension(object):
+    def __init__(self, glyph, power_of_ten, power):
+        self.glyph = glyph
+        self.power_of_ten = power_of_ten
+        self.power = power
+    
+    def __repr__(self):
+        return '<SingleDimension(%s, %s, %s)>'%(self.glyph, self.power_of_ten,
+            self.power)
 
 
 class Unit(object):
@@ -33,7 +52,9 @@ class Unit(object):
     """
     def __init__(self, data):
         if type(data) is str:
-            self._map = parse_tag(data)
+            d = parse_tag(data)
+            self.powers_of_ten = d.pop('powers_of_ten')
+            self._map = d
         else:
             msg = "Cannot initialize Unit with type %s"%type(data)
             raise TypeError(msg)
@@ -47,7 +68,10 @@ class Unit(object):
         return self._map.__contains__(key)
     
     def __getitem__(self, key):
-        return self._map[key]
+        try:
+            return self._map[key]
+        except KeyError:
+            return SingleDimension(key, 0, 0)
     
     def __setitem__(self, key, val):
         self._map[key] = val
@@ -58,6 +82,7 @@ class Unit(object):
     def __mul__(self, other):
         if isinstance(other, Unit):
             result = self._mul_Unit(other)
+        else:
             raise TypeError("Unit cannot multiply with type %s"%type(other))
         return result
     
@@ -68,20 +93,24 @@ class Unit(object):
         # Handle other's glyphs
         for glyph in other:
             processed_glyphs.add(glyph)
-            other_power = factor * other[glyph]
-            if glyph in self:
-                new_power = self[glyph] + other_power
-            else:
-                new_power = other_power
-            result[glyph] = new_power
-            if new_power == 0:
-                result._map.pop(glyph)
+            self_dim = self[glyph]
+            other_dim = other[glyph]
+            power = factor * other_dim.power + self_dim.power
+            power_of_ten = factor * other_dim.power_of_ten + self_dim.power_of_ten
+            if power == 0 and power_of_ten:
+                result.power_of_ten += power_of_ten
+            elif power:
+                result[glyph] = SingleDimension(glyph, power_of_ten,
+                                                power)
+        # Handle our glyphs which haven't yet been processed
         for glyph in self:
             if glyph in processed_glyphs:
                 continue
-            frac = self[glyph].numerator
-            num, denom = frac.numerator, frac.denominator
-            result[glyph] = fractions.Fraction(num, denom)
+            dim = self[glyph]
+            result[glyph] = SingleDimension(dim.glyph, dim.power_of_ten,
+                dim.power)
+        #Handle powers of ten
+        result.powers_of_ten += self.powers_of_ten
         return result
     
     def __div__(self, other):
@@ -95,6 +124,7 @@ class Unit(object):
         return self._mul_Unit(other, factor=-1)
     
     def __pow__(self, pow):
+        raise RuntimeError("This probably doesn't work")
         if isinstance(pow, int):
             result = self._pow_rational(pow)
         elif isinstance(pow, float):
@@ -124,35 +154,59 @@ class Unit(object):
     def __str__(self):
         """Returns a human readable representation of the unit"""
         parts = []
+        # Powers of ten which could not be written as prefixes
+        extra_powers_of_ten = self.powers_of_ten
         for glyph in self:
-            power = self[glyph]
+            # Unpack data
+            base_dimension = self[glyph]
+            power_of_ten = base_dimension.power_of_ten
+            power = base_dimension.power
+            glyph = base_dimension.glyph
+            # prefix
+            if power_of_ten == 0:
+                prefix = ''
+            elif (power.denominator * power_of_ten).denominator == 1:
+                prefix = POWERS_OF_TEN.get(power.denominator * power_of_ten, None)
+                if prefix is None:
+                    extra_powers_of_ten += power_of_ten
+                    prefix = ''
             if power == 1:
-                parts.extend(['*', glyph])
+                parts.extend(['*', prefix, glyph])
             else:
-                parts.extend(['*', glyph, '^', str(power)])
-        return ''.join(parts[1:])
+                parts.extend(['*', prefix, glyph, '^', str(power)])
+        parts = parts[1:] #Drop leading '*'
+        if extra_powers_of_ten:
+            parts.insert(0, '10^%s '%(extra_powers_of_ten,))
+        return ''.join(parts)
 
 
 def parse_tag(tag):
     """
-    Returns a map from glyph -> power
+    Returns a map from glyph -> SingleDimension
     
     Example:
     >>> result = parse_tag('V/Hz^1/2')
-    >>> for key,val in result.items:
-            print key,vale
-    >>> V 1
-    >>> Hz -1/2  
     """
     parsed = {}
+    all_tags = {}
+    parsed['powers_of_ten']= 0
     numerator, denominator = numerator_denominator(tag)
     for simple_tags, factor in zip((numerator, denominator), (1, -1)):
         for t in simple_tags:
-            glyph, power = parse_one_dimensional_tag(t)
+            power_of_ten, base_glyph, power = parse_one_dimensional_tag(t)
+            # If this was in the denominator, change sign of the unit power
+            # and the power of ten.
             power = power * factor
-            power = power + parsed.get(glyph, 0)
-            if power:
-                parsed[glyph] = power
+            power_of_ten = power_of_ten * factor
+            all_tags.setdefault(base_glyph, []).append((power_of_ten, power))
+    for base_glyph in all_tags:
+        power_of_ten = sum([elem[0] for elem in all_tags[base_glyph]])
+        power = sum([elem[1] for elem in all_tags[base_glyph]])
+        if power_of_ten and not power:
+            parsed['powers_of_ten'] = parsed['powers_of_ten'] + power_of_ten
+        elif power:
+            parsed[base_glyph] = SingleDimension(base_glyph,
+                                    power_of_ten, power)
     return parsed
 
 
@@ -186,7 +240,7 @@ def numerator_denominator(tag):
 
 def parse_one_dimensional_tag(tag):
     """
-    Returns (letter, power) for a single dimensional tag.
+    Returns (power_of_ten, base_glyph, power) for a single dimensional tag.
     
     A simple tag must have one of the following forms:
         [a-zA-Z]+
@@ -194,16 +248,37 @@ def parse_one_dimensional_tag(tag):
         [a-zA-Z]+^n/m
     
     Example:
-    >>> parse_single_tag('K^3/4')
-    >>> ('K', 3, 4)
+    >>> parse_single_tag('mHz^1/2')
+    >>> (<-3/2>, 'Hz', <1/2>)
     """
     # XXX check form of tag (ie using the regexp in the doc string)
     parts = tag.split('^')
     if len(parts) == 1:
-        letter = parts[0]
+        prefix, base_glyph = get_prefix(parts[0])
         power = fractions.Fraction(1)
     elif len(parts) == 2:
-        letter, exponent = parts
-        power = fractions.Fraction(parts[1])
-    return letter, power
+        letters, exponent = parts
+        prefix, base_glyph = get_prefix(letters)
+        power = fractions.Fraction(exponent)
+    else:
+        raise RuntimeError("tag %s has too many ^"%(tag,))
+    if prefix:
+        power_of_ten = SI_PREFIXES[prefix] * power
+    else:
+        power_of_ten = 0
+    return power_of_ten, base_glyph, power
 
+
+def get_prefix(base_glyph):
+    prefix = ''
+    n = 0
+    if base_glyph=='m':
+        return '', 'm'
+    for p in SI_PREFIXES:
+        if base_glyph.startswith(p):
+            n = len(p)
+            prefix = p
+            break
+    if n == len(base_glyph):
+        raise RuntimeError("base_glyph %s is only a prefix"%(base_glyph,))
+    return prefix, base_glyph[n:]
