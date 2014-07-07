@@ -56,6 +56,16 @@ class SingleDimension(object):
         d['glyph'] = self.glyph
         return d
     
+    def __eq__(self, other):
+        if not isinstance(other, SingleDimension):
+            t = type(other)
+            msg = "Cannot check equality of SingleDimension and %s"%(t,)
+            raise TypeError(msg)
+        pref_eq = self.log10_pref == other.log10_pref
+        glyph_eq = self.glyph == other.glyph
+        power_eq = self.power == other.power
+        return all((pref_eq, glyph_eq, power_eq))
+    
     def __repr__(self):
         return '<SingleDimension(%s, %s, %s)>'%(self.glyph, self.log10_pref,
             self.power)
@@ -173,6 +183,14 @@ class Unit(object):
         assert abs(approximation - f) < 1E-10
         power = integer_part + fractions.Fraction(1, denominator)
         return self._pow_rational(power)
+    
+    
+    # comparison
+    
+    def __eq__(self, other):
+        maps_eq = self._map == other._map
+        prefactors_eq = self.log10_pref == other.log10_pref
+        return all((maps_eq, prefactors_eq))
     
     
     # Other

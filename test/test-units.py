@@ -22,7 +22,8 @@ class Test(unittest.TestCase):
     
     def tearDown(self):
         pass
-    
+
+
     def test_get_prefix(self):
         results = {'us': {'ch': 'u', 'val': -6, 'glyph': 's'},
                    'MHz': {'ch': 'M', 'val': 6, 'glyph': 'Hz'}
@@ -68,6 +69,11 @@ class Test(unittest.TestCase):
 
 
     def test_parse_tag(self):
+        """
+        Test tag parsing.
+        
+        'pot' means "power of ten".
+        """
         tags = {'V': {'pot': 0,
                       'V': {'log10_pref': 0,
                             'glyph': 'V',
@@ -112,7 +118,16 @@ class Test(unittest.TestCase):
 
 
     def test_multiplication(self):
-        pass
+        Hz = units.Unit('Hz')
+        kHz = units.Unit('kHz')
+        m = units.Unit('m')
+        rtHz = units.Unit('Hz^1/2')
+        pairs = [(m, Hz, units.Unit('m*Hz')),
+                 (Hz, rtHz, units.Unit('Hz^3/2'))
+                ]
+        for x, y, result in pairs:
+            self.assertEqual(x*y, result)
+
 
 if __name__ == "__main__":
     unittest.main()
