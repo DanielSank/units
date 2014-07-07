@@ -229,6 +229,10 @@ class Unit(object):
         if extra_powers_of_ten:
             parts.insert(0, '10^%s '%(extra_powers_of_ten,))
         return ''.join(parts)
+    
+    def __repr__(self):
+        return ''.join([object.__repr__(self), ': ', self._map.__repr__(),
+                         ' with prefactor: ', '10^%s'%(self.log10_pref,)])
 
 
 def parse_tag(tag):
