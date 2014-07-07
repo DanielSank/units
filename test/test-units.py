@@ -43,10 +43,10 @@ class Test(unittest.TestCase):
                 'Hz': {'log10_pref': 0,
                     'glyph': 'Hz',
                     'pow': 1},
-                'kHz^1/2': {'log10_pref': fractions.Fraction(3,2),
+                'kHz^1/2': {'log10_pref': frac(3,2),
                     'glyph': 'Hz',
-                    'pow': fractions.Fraction(1,2)}
-        }
+                    'pow': frac(1,2)}
+                }
         for tag in tags:
             log10_pref, base_glyph, power = \
                 units.parse_one_dimensional_tag(tag)
@@ -58,8 +58,12 @@ class Test(unittest.TestCase):
     def test_numerator_denominator(self):
         tags = {'V': (['V'], []),
                 'V/Hz^1/2': (['V'], ['Hz^1/2']),
-                'km/ns^1/3': (['km'], ['ns^1/3'])
+                'km/ns^1/3': (['km'], ['ns^1/3']),
+                's/Hz/V^1/2*m': (['s', 'm'], ['Hz', 'V^1/2'])
                }
+        for tag in tags:
+            tags[tag][0].sort()
+            tags[tag][1].sort()
         for tag in tags:
             num, denom = units.numerator_denominator(tag)
             num.sort()
@@ -102,6 +106,12 @@ class Test(unittest.TestCase):
                                       'power': frac(1, 2)
                                      }
                               },
+                'kHz*Hz': {'pot': 0,
+                           'Hz': {'log10_pref': 3,
+                                  'glyph': 'Hz',
+                                  'power': frac(2)
+                                 }
+                          },
                 # All dimensions cancel, leaving only powers of ten.
                 'kB/MB': {'pot': -3},
                 'kY^1/2/Y^1/2': {'pot': frac(3, 2)},
@@ -120,10 +130,21 @@ class Test(unittest.TestCase):
     def test_multiplication(self):
         Hz = units.Unit('Hz')
         kHz = units.Unit('kHz')
-        m = units.Unit('m')
         rtHz = units.Unit('Hz^1/2')
+        s = units.Unit('s')
+        m = units.Unit('m')
+        
+        kilo = units.Unit('')
+        kilo.log10_pref = 3
+        milli = units.Unit('')
+        milli.log10_pref = -3
+        
         pairs = [(m, Hz, units.Unit('m*Hz')),
-                 (Hz, rtHz, units.Unit('Hz^3/2'))
+                 (Hz, rtHz, units.Unit('Hz^3/2')),
+                 (kHz, Hz, units.Unit('kHz*Hz')),
+                 (units.Unit('m/s'), s, m),
+                 (kHz, units.Unit('Hz^-1'), kilo),
+                 (Hz, units.Unit('kHz^-1'), milli)
                 ]
         for x, y, result in pairs:
             self.assertEqual(x*y, result)
