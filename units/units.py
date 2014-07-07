@@ -18,14 +18,43 @@ POWERS_OF_TEN = {}
 for key,value in SI_PREFIXES.items():
     POWERS_OF_TEN[value] = key
 
+DERIVED_UNITS = {'Hz': 's^-1',
+                 'N': 'kg*m/s^2'
+                }
+
+
 MULT = '*'
 
 
 class SingleDimension(object):
+    """
+    A unit is a prefactor, glyph, and power: km^2
+        prefactor: 10^3/2
+        glyph: "m"
+        power: 2
+    We define the prefactor is such that the total unit is
+    prefactor * (glyph ** power).
+    
+    A derived unit is a unit which is a combination of other units. For
+    example, Hz is the same as 1/s. How should we keep track of this?
+    We could just immediately convert Hz to 1/s whenever we encounter Hz.
+    This isn't necessarily what we want though, because if we have a
+    frequency chirp, we might want to express the chirp rate as a value in
+    Hz/s. We'll also give units an equivalence
+    Hz.equivalence = (0, "s", -1).
+    """
     def __init__(self, glyph, power_of_ten, power):
         self.glyph = glyph
         self.power_of_ten = power_of_ten
         self.power = power
+        self.equivalence = DERIVED_UNITS.get(glyph, None)
+    
+    def as_dict(self):
+        d = {}
+        d['log10_pref'] = self.power_of_ten
+        d['power'] = self.power
+        d['glyph'] = self.glyph
+        return d
     
     def __repr__(self):
         return '<SingleDimension(%s, %s, %s)>'%(self.glyph, self.power_of_ten,
@@ -200,10 +229,16 @@ def parse_tag(tag):
             power_of_ten = power_of_ten * factor
             all_tags.setdefault(base_glyph, []).append((power_of_ten, power))
     for base_glyph in all_tags:
+        # Collect powers of ten and powers from each instance of each base
+        # glyph.
         power_of_ten = sum([elem[0] for elem in all_tags[base_glyph]])
         power = sum([elem[1] for elem in all_tags[base_glyph]])
+        # If the glyph's powers all cancelled, keep track of leftover powers of
+        # ten.
         if power_of_ten and not power:
             parsed['powers_of_ten'] = parsed['powers_of_ten'] + power_of_ten
+        # Otherwise, just make a SingleDimension to represent this glyph and its
+        # associated powers of ten and powers.
         elif power:
             parsed[base_glyph] = SingleDimension(base_glyph,
                                     power_of_ten, power)
@@ -270,6 +305,9 @@ def parse_one_dimensional_tag(tag):
 
 
 def get_prefix(base_glyph):
+    """
+    Return the SI prefix and base glyph from a prefixed glyph.
+    """
     prefix = ''
     n = 0
     if base_glyph=='m':
