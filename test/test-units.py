@@ -104,12 +104,15 @@ class Test(unittest.TestCase):
         for tag in tags:
             parsed = units.parse_tag(tag)
             pot = tags[tag].pop('pot')
-            self.assertEqual(parsed['powers_of_ten'], pot)
+            self.assertEqual(parsed['log10_pref'], pot)
             for glyph in tags[tag]:
                 expected = tags[tag][glyph]
                 result = parsed[glyph]
                 self.assertEqual(expected, result.as_dict())
 
+
+    def test_multiplication(self):
+        pass
 
 if __name__ == "__main__":
     unittest.main()
