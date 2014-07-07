@@ -179,35 +179,33 @@ class Unit(object):
     
     def __str__(self):
         """Returns a human readable representation of the unit"""
-        # if self._str is not None:
-        #     return self._str
         parts = []
         # Powers of ten which could not be written as prefixes
         extra_powers_of_ten = self.log10_pref
-        for glyph in self:
+        for glyph in self._map:
             # Unpack data
-            base_dimension = self[glyph]
+            base_dimension = self._map[glyph]
             log10_pref = base_dimension.log10_pref
             power = base_dimension.power
             glyph = base_dimension.glyph
             # prefix
+            # If there is no power of ten for this entry, there's no prefix.
             if log10_pref == 0:
                 prefix = ''
-            elif abs((power.denominator * log10_pref).denominator) == 1:
-                # Get power of ten for prefix
-                prefix_factor = log10_pref * power.denominator
-                if power > 0:
-                    prefix_factor *= 1
-                else:
-                    prefix_factor *= -1
-                
+            # If the power of ten multiplied by the unit power is an integer,
+            # then it may be possible to write an SI prefix with the unit.
+            elif (log10_pref / power).denominator == 1:
+                prefix_factor = log10_pref / power
                 prefix = POWERS_OF_TEN.get(prefix_factor, None)
                 if prefix is None:
                     extra_powers_of_ten += log10_pref
                     prefix = ''
+            else:
+                extra_powers_of_ten += log10_pref
+                prefix = ''
             if power == 1:
                 parts.extend(['*', prefix, glyph])
-            else:
+            else :
                 parts.extend(['*', prefix, glyph, '^', str(power)])
         parts = parts[1:] #Drop leading '*'
         if extra_powers_of_ten:
