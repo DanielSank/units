@@ -113,6 +113,7 @@ class Test(unittest.TestCase):
                                  }
                           },
                 # All dimensions cancel, leaving only powers of ten.
+                'kHz^1/2/GHz^1/2': {'pot': frac(-3, 1)},
                 'kB/MB': {'pot': -3},
                 'kY^1/2/Y^1/2': {'pot': frac(3, 2)},
                 'MY^-3/2/Y^-3/2': {'pot': -9}
