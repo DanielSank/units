@@ -28,12 +28,17 @@ MULT = '*'
 
 class SingleDimension(object):
     """
-    A unit is a prefactor, glyph, and power: km^2
-        prefactor: 10^3/2
-        glyph: "m"
-        power: 2
-    We define the prefactor is such that the total unit is
-    prefactor * (glyph ** power).
+    A single dimension part of a unit.
+    
+    A SingleDimension has three parts. Consider, for example, km^3/2.
+    This can be broken down to 10^9/2 * m^3/2.
+    We thus have a
+        log10_pref: 9/2
+        glyph: 'm'
+        power: 3^2
+    
+    In other words, the SingleDimension can be re-expressed as
+    10^(log10_pref) * (glyph^power).
     
     A derived unit is a unit which is a combination of other units. For
     example, Hz is the same as 1/s. How should we keep track of this?
@@ -48,6 +53,8 @@ class SingleDimension(object):
         self.log10_pref = log10_pref
         self.power = power
         self.equivalence = DERIVED_UNITS.get(glyph, None)
+        if self.equivalence:
+            self.equivalence = Unit(self.equivalence)**self.power
     
     def as_dict(self):
         d = {}
@@ -57,6 +64,7 @@ class SingleDimension(object):
         return d
     
     def __eq__(self, other):
+        raise NotImplementedError()
         if not isinstance(other, SingleDimension):
             t = type(other)
             msg = "Cannot check equality of SingleDimension and %s"%(t,)
@@ -90,7 +98,7 @@ class Unit(object):
     supported by approximating the float with a rational number.
     """
     def __init__(self, data):
-        self._str = data
+        self._str = data #The original, user-supplied string
         d = parse_tag(data)
         self.log10_pref = d.pop('log10_pref')
         self._map = d
@@ -107,11 +115,28 @@ class Unit(object):
         try:
             return self._map[key]
         except KeyError:
+            # XXX What is the point of this?
             return SingleDimension(key, 0, 0)
     
     def __setitem__(self, key, val):
         self._map[key] = val
     
+    def _reduce(self):
+        """
+        Reduce compatible dimensions.
+        
+        For example, a Unit specified as s*MHz will turn into a dimensionless
+        Unit with a prefactor of 10^6.
+        """
+        result = Unit('')
+        d = {}
+        for glyph in self._map:
+            dim = self._map[glyph]
+            if dim.equivalence is not None:
+                dim = dim.equivalence
+            
+        
+        return Unit(finalString)
     
     # Arithmetic
     
@@ -160,18 +185,21 @@ class Unit(object):
         return self._mul_Unit(other, factor=-1)
     
     def __pow__(self, pow):
-        raise RuntimeError("This probably doesn't work")
-        if isinstance(pow, int):
+        if isinstance(pow, (int, fractions.Fraction)):
             result = self._pow_rational(pow)
         elif isinstance(pow, float):
             result = self._pow_float(pow)
+        else:
+            raise TypeError("Cannot raise Unit to power %s"%(pow,))
         return result
     
     def _pow_rational(self, n):
         result = Unit('')
         for glyph in self:
-            power = self[glyph] * n
-            result[glyph] = power
+            sd = self[glyph]
+            new_sd = SingleDimension(glyph, sd.log10_pref*n, sd.power*n)
+            result[glyph] = new_sd
+        result.log10_pref = self.log10_pref * n
         return result
     
     def _pow_float(self, f):
